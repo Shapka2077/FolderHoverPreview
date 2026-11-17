@@ -14,6 +14,7 @@ internal sealed class PreviewController : IDisposable
     private readonly Forms.NotifyIcon _trayIcon;
     private readonly System.Drawing.Icon _trayImage;
     private readonly List<(Forms.ToolStripMenuItem Item, string Extension)> _formatMenuItems = [];
+    private Forms.ContextMenuStrip? _trayMenu;
     private Dictionary<string, string> _folders;
     private PreviewFormatPreferences _formatPreferences;
     private PreviewThemePreferences _themePreferences;
@@ -151,6 +152,8 @@ internal sealed class PreviewController : IDisposable
             startupItem.Checked = StartupRegistration.IsEnabled;
             UpdateFormatMenuChecks();
         };
+        _trayMenu = menu;
+        ApplyTrayTheme();
         _trayImage = TrayIconFactory.Create();
         _trayIcon = new Forms.NotifyIcon
         {
@@ -322,6 +325,7 @@ internal sealed class PreviewController : IDisposable
             _formatPreferences = PreviewFormatConfig.Load();
             _themePreferences = PreviewThemeConfig.Load();
             _preview.ApplyTheme(_themePreferences);
+            ApplyTrayTheme();
             _configSnapshot = snapshot;
             _lastDesktopPointCheck = 0;
             HidePreview();
@@ -438,6 +442,52 @@ internal sealed class PreviewController : IDisposable
         }
     }
 
+    private void ApplyTrayTheme()
+    {
+        if (_trayMenu is null)
+            return;
+
+        var renderer = new PreviewTrayRenderer(_themePreferences);
+        var background = DrawingColorFromTheme(_themePreferences.WindowBackground);
+        var foreground = DrawingColorFromTheme(_themePreferences.TileText);
+        var border = DrawingColorFromTheme(_themePreferences.WindowBorder);
+        ApplyMenuTheme(_trayMenu, renderer, background, foreground, border);
+    }
+
+    private static void ApplyMenuTheme(
+        Forms.ToolStrip menu,
+        Forms.ToolStripRenderer renderer,
+        System.Drawing.Color background,
+        System.Drawing.Color foreground,
+        System.Drawing.Color border)
+    {
+        menu.Renderer = renderer;
+        menu.BackColor = background;
+        menu.ForeColor = foreground;
+
+        foreach (Forms.ToolStripItem item in menu.Items)
+        {
+            item.BackColor = background;
+            item.ForeColor = item is Forms.ToolStripSeparator ? border : foreground;
+
+            if (item is Forms.ToolStripDropDownItem { HasDropDownItems: true } dropDownItem)
+            {
+                ApplyMenuTheme(
+                    dropDownItem.DropDown,
+                    renderer,
+                    background,
+                    foreground,
+                    border);
+            }
+        }
+    }
+
+    private static System.Drawing.Color DrawingColorFromTheme(string value)
+    {
+        var color = PreviewThemeConfig.ParseColor(value);
+        return System.Drawing.Color.FromArgb(color.R, color.G, color.B);
+    }
+
     private void ConfigureAppearance()
     {
         if (_appearanceDialogOpen)
@@ -464,6 +514,7 @@ internal sealed class PreviewController : IDisposable
             PreviewThemeConfig.Save(normalized);
             _themePreferences = normalized;
             _preview.ApplyTheme(_themePreferences);
+            ApplyTrayTheme();
             _configSnapshot = ReadConfigSnapshot();
             _lastDesktopPointCheck = 0;
             HidePreview();
