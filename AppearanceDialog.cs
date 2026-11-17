@@ -27,7 +27,7 @@ internal static class AppearanceDialog
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
-            ClientSize = new Size(820, 660),
+            ClientSize = new Size(820, 550),
             Font = new Font("Segoe UI", 9)
         };
         using var toolTip = new Forms.ToolTip
@@ -42,7 +42,6 @@ internal static class AppearanceDialog
         var savedTheme = draft.Clone();
         var isLoading = false;
         PreviewThemePreferences? result = null;
-        ThemePreviewControl themePreview = null!;
         var colorPresetChoices = PreviewThemeConfig.ColorPresets
             .Select(preset => new PresetChoice(preset.Id, preset.Name))
             .ToArray();
@@ -239,32 +238,12 @@ internal static class AppearanceDialog
         settingsPanel.Controls.Add(settingsTable);
         visualGroup.Controls.Add(settingsPanel);
 
-        var previewGroup = new Forms.GroupBox
-        {
-            Text = "Предпросмотр",
-            Left = 12,
-            Top = 493,
-            Width = 796,
-            Height = 105
-        };
-        themePreview = new ThemePreviewControl
-        {
-            Left = 10,
-            Top = 20,
-            Width = 770,
-            Height = 76,
-            Theme = draft
-        };
-        previewGroup.Controls.Add(themePreview);
-        toolTip.SetToolTip(
-            themePreview,
-            "Живой образец текущего оформления. Плитки показывают обычное состояние, наведение и нажатие.");
         var resetButton = new Forms.Button
         {
             Name = "RestoreDefaultsButton",
             Text = "Восстановить по умолчанию",
             Left = 18,
-            Top = 610,
+            Top = 500,
             Width = 210,
             Height = 32
         };
@@ -276,7 +255,7 @@ internal static class AppearanceDialog
             Name = "SaveButton",
             Text = "Сохранить",
             Left = 584,
-            Top = 610,
+            Top = 500,
             Width = 100,
             Height = 32
         };
@@ -285,7 +264,7 @@ internal static class AppearanceDialog
             Name = "CancelButton",
             Text = "Отмена",
             Left = 694,
-            Top = 610,
+            Top = 500,
             Width = 100,
             Height = 32,
             DialogResult = Forms.DialogResult.Cancel
@@ -294,7 +273,6 @@ internal static class AppearanceDialog
         [
             colorsGroup,
             visualGroup,
-            previewGroup,
             resetButton,
             saveButton,
             cancelButton
@@ -302,11 +280,6 @@ internal static class AppearanceDialog
         dialog.AcceptButton = saveButton;
         dialog.CancelButton = cancelButton;
         dialog.Shown += (_, _) => ApplyNativeTitleBarTheme(dialog, draft);
-
-        void RefreshMiniPreview()
-        {
-            themePreview.Theme = draft;
-        }
 
         void UpdateColorControls()
         {
@@ -334,7 +307,6 @@ internal static class AppearanceDialog
             colorPresetCombo.SelectedItem = colorPresetChoices[^1];
             isLoading = false;
             ApplyDialogTheme(dialog, draft, toolTip);
-            RefreshMiniPreview();
         }
 
         void MarkCustomVisual()
@@ -346,7 +318,6 @@ internal static class AppearanceDialog
             isLoading = true;
             visualPresetCombo.SelectedItem = visualPresetChoices[^1];
             isLoading = false;
-            RefreshMiniPreview();
         }
 
         void LoadColorPreset(string presetId)
@@ -376,7 +347,6 @@ internal static class AppearanceDialog
             }
 
             ApplyDialogTheme(dialog, draft, toolTip);
-            RefreshMiniPreview();
         }
 
         void LoadVisualPreset(string presetId)
@@ -404,7 +374,6 @@ internal static class AppearanceDialog
                 isLoading = false;
             }
 
-            RefreshMiniPreview();
         }
 
         void LoadFullTheme(PreviewThemePreferences theme)
@@ -426,7 +395,6 @@ internal static class AppearanceDialog
             }
 
             ApplyDialogTheme(dialog, draft, toolTip);
-            RefreshMiniPreview();
         }
 
         colorPresetCombo.SelectedValueChanged += (_, _) =>
@@ -450,7 +418,6 @@ internal static class AppearanceDialog
         UpdateColorControls();
         UpdateVisualControls();
         ApplyDialogTheme(dialog, draft, toolTip);
-        RefreshMiniPreview();
 
         return dialog.ShowDialog() == Forms.DialogResult.OK ? result : null;
     }
@@ -777,8 +744,7 @@ internal static class AppearanceDialog
 
     private static void ApplyDialogTheme(Forms.Control control, PreviewThemePreferences theme)
     {
-        if (control is ThemePreviewControl
-            || (control is Forms.Button swatch && swatch.Tag is ColorField))
+        if (control is Forms.Button swatch && swatch.Tag is ColorField)
         {
             return;
         }

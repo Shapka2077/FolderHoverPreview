@@ -140,8 +140,12 @@ internal sealed class PreviewWindow : Window
         }
 
         _content.Measure(new Size(900, 1600));
-        Width = _content.DesiredSize.Width + _frame.Padding.Left + _frame.Padding.Right + 2;
-        Height = _content.DesiredSize.Height + _frame.Padding.Top + _frame.Padding.Bottom + 2;
+        Width = _content.DesiredSize.Width
+            + _frame.Padding.Left + _frame.Padding.Right
+            + _frame.BorderThickness.Left + _frame.BorderThickness.Right;
+        Height = _content.DesiredSize.Height
+            + _frame.Padding.Top + _frame.Padding.Bottom
+            + _frame.BorderThickness.Top + _frame.BorderThickness.Bottom;
 
         Opacity = 0;
         if (!IsVisible)
@@ -280,72 +284,18 @@ internal sealed class PreviewWindow : Window
         else
             label = Path.GetFileNameWithoutExtension(label);
 
-        var body = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top
-        };
-        body.Children.Add(new Image
-        {
-            Source = GetFileIcon(file, theme.IconSize),
-            Width = theme.IconSize,
-            Height = theme.IconSize,
-            Stretch = Stretch.Uniform,
-            Margin = new Thickness(0, 0, 0, Math.Max(2, theme.TileSpacing / 2))
-        });
-        var caption = new TextBlock
-        {
-            Text = label,
-            Foreground = CreateBrush(theme.TileText),
-            FontFamily = new FontFamily(theme.FontFamily),
-            FontSize = theme.TileFontSize,
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = Math.Max(30, theme.TileHeight - theme.IconSize - 14),
-            MaxWidth = Math.Max(30, theme.TileWidth - 8)
-        };
-        body.Children.Add(caption);
-
-        var normalBrush = CreateBrush(theme.TileBackground);
-        var hoverBrush = CreateBrush(theme.TileHoverBackground);
-        var pressedBrush = CreateBrush(theme.TilePressedBackground);
-        var accentBrush = CreateBrush(theme.AccentText);
-        var button = new ThemedButton
-        {
-            Content = body,
-            Width = theme.TileWidth,
-            MinHeight = theme.TileHeight,
-            Margin = new Thickness(0, 0, theme.TileSpacing, theme.TileSpacing),
-            Padding = new Thickness(4),
-            Background = normalBrush,
-            CornerRadius = new CornerRadius(theme.TileCornerRadius),
-            Focusable = false,
-            Cursor = Cursors.Hand,
-            Style = (Style)System.Windows.Application.Current.FindResource("PreviewTileButton")
-        };
-        button.MouseEnter += (_, _) =>
-        {
-            button.Background = hoverBrush;
-            caption.Foreground = accentBrush;
-        };
-        button.MouseLeave += (_, _) =>
-        {
-            button.Background = normalBrush;
-            caption.Foreground = CreateBrush(theme.TileText);
-        };
-        button.PreviewMouseDown += (_, _) => button.Background = pressedBrush;
-        button.PreviewMouseUp += (_, _) => button.Background = hoverBrush;
-        button.Click += (_, _) =>
-        {
-            try
+        return PreviewTileFactory.Create(
+            label,
+            theme,
+            GetFileIcon(file, theme.IconSize),
+            () =>
             {
-                Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
-            }
-            catch (Exception) { }
-        };
-
-        return button;
+                try
+                {
+                    Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+                }
+                catch (Exception) { }
+            });
     }
 
     private static Brush CreateBrush(string color)
