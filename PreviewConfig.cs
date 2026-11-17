@@ -24,19 +24,10 @@ internal static class PreviewConfig
         if (File.Exists(ConfigPath))
             return;
 
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        var defaults = new[]
-        {
-            Path.Combine(desktop, "Games & Mods"),
-            Path.Combine(desktop, "Apps"),
-            Path.Combine(desktop, "Development"),
-            Path.Combine(desktop, "Utilities")
-        };
-
         WithConfigLock(() =>
         {
             if (!File.Exists(ConfigPath))
-                WritePaths(defaults);
+                WritePaths(Array.Empty<string>());
         });
     }
 

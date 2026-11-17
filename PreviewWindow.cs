@@ -54,7 +54,7 @@ internal sealed class PreviewWindow : Window
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 260,
             Margin = new Thickness(0, 5, 0, 0),
-            Text = "Папка пуста или не содержит ярлыков приложений."
+            Text = "Папка пуста или не содержит файлов выбранных форматов."
         };
 
         _content = new StackPanel();
@@ -92,12 +92,13 @@ internal sealed class PreviewWindow : Window
         string folderName,
         string folderPath,
         NativeMethods.Point cursor,
-        DesktopHit folderBounds)
+        DesktopHit folderBounds,
+        IReadOnlySet<string> enabledExtensions)
     {
         _heading.Text = folderName;
         _tiles.Children.Clear();
 
-        var files = GetPreviewFiles(folderPath);
+        var files = GetPreviewFiles(folderPath, enabledExtensions);
         _emptyMessage.Visibility = files.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         _tiles.Visibility = files.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
 
@@ -225,13 +226,19 @@ internal sealed class PreviewWindow : Window
         return maximum < minimum ? minimum : Math.Clamp(coordinate, minimum, maximum);
     }
 
-    private static List<string> GetPreviewFiles(string folderPath)
+    private static List<string> GetPreviewFiles(string folderPath, IReadOnlySet<string> enabledExtensions)
     {
         var files = new List<string>();
+        if (enabledExtensions.Count == 0)
+            return files;
+
         try
         {
-            foreach (var pattern in new[] { "*.lnk", "*.url", "*.exe" })
-                files.AddRange(Directory.EnumerateFiles(folderPath, pattern, SearchOption.TopDirectoryOnly));
+            foreach (var file in Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly))
+            {
+                if (enabledExtensions.Contains(Path.GetExtension(file)))
+                    files.Add(file);
+            }
         }
         catch (UnauthorizedAccessException) { }
         catch (DirectoryNotFoundException) { }
@@ -245,9 +252,7 @@ internal sealed class PreviewWindow : Window
         var label = Path.GetFileName(file) ?? file;
         if (label.EndsWith(".exe.lnk", StringComparison.OrdinalIgnoreCase))
             label = label[..^8];
-        else if (label.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
-                 || label.EndsWith(".url", StringComparison.OrdinalIgnoreCase)
-                 || label.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        else
             label = Path.GetFileNameWithoutExtension(label);
 
         var body = new StackPanel

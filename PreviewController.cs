@@ -13,8 +13,12 @@ internal sealed class PreviewController : IDisposable
     private readonly DispatcherTimer _rightButtonTimer;
     private readonly Forms.NotifyIcon _trayIcon;
     private readonly System.Drawing.Icon _trayImage;
+    private readonly List<(Forms.ToolStripMenuItem Item, string Extension)> _formatMenuItems = [];
     private Dictionary<string, string> _folders;
+    private PreviewFormatPreferences _formatPreferences;
     private string _configSnapshot;
+    private Forms.ToolStripMenuItem? _customFormatsEnabledItem;
+    private Forms.ToolStripMenuItem? _configureCustomFormatsItem;
     private string? _currentFolder;
     private long _lastHover;
     private long _lastPreferenceCheck = -1000;
@@ -27,6 +31,7 @@ internal sealed class PreviewController : IDisposable
     private bool _contextWasOpen;
     private bool _desktopPointerDown;
     private bool _rightButtonDown;
+    private bool _customExtensionsDialogOpen;
     private string? _contextFolderPath;
     private int _desktopLayoutRevision;
     private bool _disposed;
@@ -34,6 +39,7 @@ internal sealed class PreviewController : IDisposable
     public PreviewController(Dictionary<string, string> folders)
     {
         _folders = folders;
+        _formatPreferences = PreviewFormatConfig.Load();
         _configSnapshot = ReadConfigSnapshot();
 
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
@@ -56,6 +62,42 @@ internal sealed class PreviewController : IDisposable
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Открыть файл настроек", null, (_, _) => OpenConfig());
+
+        var formatsMenu = new Forms.ToolStripMenuItem("Форматы превью");
+        string? previousFormatGroup = null;
+        foreach (var option in PreviewFormatConfig.CommonFormats)
+        {
+            if (previousFormatGroup is not null && previousFormatGroup != option.Group)
+                formatsMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            previousFormatGroup = option.Group;
+
+            var formatItem = new Forms.ToolStripMenuItem(option.Label)
+            {
+                CheckOnClick = true,
+                Checked = _formatPreferences.EnabledExtensions.Contains(
+                    option.Extension,
+                    StringComparer.OrdinalIgnoreCase)
+            };
+            _formatMenuItems.Add((formatItem, option.Extension));
+            formatItem.Click += (_, _) => SaveFormatMenuSelection();
+            formatsMenu.DropDownItems.Add(formatItem);
+        }
+
+        formatsMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+        _customFormatsEnabledItem = new Forms.ToolStripMenuItem("Использовать свои расширения")
+        {
+            CheckOnClick = true,
+            Checked = _formatPreferences.UseCustomExtensions
+        };
+        _customFormatsEnabledItem.Click += (_, _) => ToggleCustomFormats();
+        formatsMenu.DropDownItems.Add(_customFormatsEnabledItem);
+
+        _configureCustomFormatsItem = new Forms.ToolStripMenuItem();
+        _configureCustomFormatsItem.Click += (_, _) => ConfigureCustomFormats();
+        formatsMenu.DropDownItems.Add(_configureCustomFormatsItem);
+        UpdateFormatMenuChecks();
+        menu.Items.Add(formatsMenu);
+
         var startupItem = new Forms.ToolStripMenuItem("Автозагрузка")
         {
             CheckOnClick = true,
@@ -98,7 +140,12 @@ internal sealed class PreviewController : IDisposable
         menu.Items.Add(removeContextMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => System.Windows.Application.Current.Shutdown());
-        menu.Opening += (_, _) => startupItem.Checked = StartupRegistration.IsEnabled;
+        menu.Opening += (_, _) =>
+        {
+            RefreshPreferences(force: true);
+            startupItem.Checked = StartupRegistration.IsEnabled;
+            UpdateFormatMenuChecks();
+        };
         _trayImage = TrayIconFactory.Create();
         _trayIcon = new Forms.NotifyIcon
         {
@@ -232,7 +279,12 @@ internal sealed class PreviewController : IDisposable
             {
                 try
                 {
-                    _preview.ShowFolder(found, _folders[found], point, folderHit);
+                    _preview.ShowFolder(
+                        found,
+                        _folders[found],
+                        point,
+                        folderHit,
+                        _formatPreferences.GetEnabledExtensionSet());
                     _currentFolder = found;
                 }
                 catch (Exception error)
@@ -248,10 +300,10 @@ internal sealed class PreviewController : IDisposable
         }
     }
 
-    private void RefreshPreferences()
+    private void RefreshPreferences(bool force = false)
     {
         var now = Environment.TickCount64;
-        if (now - _lastPreferenceCheck < 900)
+        if (!force && now - _lastPreferenceCheck < 900)
             return;
         _lastPreferenceCheck = now;
 
@@ -262,6 +314,7 @@ internal sealed class PreviewController : IDisposable
                 return;
 
             _folders = PreviewConfig.LoadEnabledDesktopFolders();
+            _formatPreferences = PreviewFormatConfig.Load();
             _configSnapshot = snapshot;
             _lastDesktopPointCheck = 0;
             HidePreview();
@@ -270,10 +323,110 @@ internal sealed class PreviewController : IDisposable
         catch (UnauthorizedAccessException) { }
     }
 
-    private static string ReadConfigSnapshot() =>
-        File.Exists(PreviewConfig.ConfigPath)
+    private static string ReadConfigSnapshot()
+    {
+        var folders = File.Exists(PreviewConfig.ConfigPath)
             ? File.ReadAllText(PreviewConfig.ConfigPath)
             : string.Empty;
+        var formats = File.Exists(PreviewFormatConfig.SettingsPath)
+            ? File.ReadAllText(PreviewFormatConfig.SettingsPath)
+            : string.Empty;
+        return $"{folders.Length}:{folders}{formats.Length}:{formats}";
+    }
+
+    private void SaveFormatMenuSelection()
+    {
+        SaveFormatPreferences(new PreviewFormatPreferences
+        {
+            EnabledExtensions = _formatMenuItems
+                .Where(entry => entry.Item.Checked)
+                .Select(entry => entry.Extension)
+                .ToList(),
+            CustomExtensions = _formatPreferences.CustomExtensions,
+            UseCustomExtensions = _formatPreferences.UseCustomExtensions
+        });
+    }
+
+    private void ToggleCustomFormats()
+    {
+        SaveFormatPreferences(new PreviewFormatPreferences
+        {
+            EnabledExtensions = _formatPreferences.EnabledExtensions,
+            CustomExtensions = _formatPreferences.CustomExtensions,
+            UseCustomExtensions = _customFormatsEnabledItem?.Checked == true
+        });
+    }
+
+    private void ConfigureCustomFormats()
+    {
+        if (_customExtensionsDialogOpen)
+            return;
+
+        _customExtensionsDialogOpen = true;
+        try
+        {
+            var customExtensions = CustomExtensionsDialog.Show(_formatPreferences.CustomExtensions);
+            if (customExtensions is null)
+                return;
+
+            SaveFormatPreferences(new PreviewFormatPreferences
+            {
+                EnabledExtensions = _formatPreferences.EnabledExtensions,
+                CustomExtensions = customExtensions,
+                UseCustomExtensions = _formatPreferences.UseCustomExtensions && customExtensions.Count > 0
+            });
+        }
+        finally
+        {
+            _customExtensionsDialogOpen = false;
+        }
+    }
+
+    private void SaveFormatPreferences(PreviewFormatPreferences preferences)
+    {
+        try
+        {
+            var normalized = PreviewFormatConfig.Normalize(preferences);
+            PreviewFormatConfig.Save(normalized);
+            _formatPreferences = normalized;
+            _configSnapshot = ReadConfigSnapshot();
+            _lastDesktopPointCheck = 0;
+            HidePreview();
+            UpdateFormatMenuChecks();
+        }
+        catch (Exception error)
+        {
+            UpdateFormatMenuChecks();
+            Forms.MessageBox.Show(
+                $"Не удалось сохранить настройки форматов:\n{error.Message}",
+                "FolderHoverPreview",
+                Forms.MessageBoxButtons.OK,
+                Forms.MessageBoxIcon.Error);
+        }
+    }
+
+    private void UpdateFormatMenuChecks()
+    {
+        foreach (var (item, extension) in _formatMenuItems)
+        {
+            item.Checked = _formatPreferences.EnabledExtensions.Contains(
+                extension,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (_customFormatsEnabledItem is not null)
+        {
+            _customFormatsEnabledItem.Enabled = _formatPreferences.CustomExtensions.Count > 0;
+            _customFormatsEnabledItem.Checked = _formatPreferences.UseCustomExtensions;
+        }
+        if (_configureCustomFormatsItem is not null)
+        {
+            var count = _formatPreferences.CustomExtensions.Count;
+            _configureCustomFormatsItem.Text = count == 0
+                ? "Настроить свои расширения…"
+                : $"Настроить свои расширения… ({count})";
+        }
+    }
 
     private void HidePreview()
     {
