@@ -42,6 +42,7 @@ internal static class AppearanceDialog
         var draft = PreviewThemeConfig.Normalize(current);
         var savedTheme = draft.Clone();
         var isLoading = false;
+        var isUserResizing = false;
         PreviewThemePreferences? result = null;
         PreviewWindow? exampleWindow = null;
         var colorPresetChoices = PreviewThemeConfig.ColorPresets
@@ -92,7 +93,7 @@ internal static class AppearanceDialog
             Left = visualPresetLabel.Right + 8,
             Top = 16,
             Width = dialog.ClientSize.Width - visualPresetLabel.Right - 24,
-            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left,
             DropDownStyle = Forms.ComboBoxStyle.DropDownList
         };
         visualPresetCombo.Items.AddRange(visualPresetChoices);
@@ -141,7 +142,7 @@ internal static class AppearanceDialog
             Top = 24,
             Width = 360,
             Height = colorFields.Length * 38,
-            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left,
             ColumnCount = 2,
             RowCount = colorFields.Length,
             AutoSize = false
@@ -201,7 +202,7 @@ internal static class AppearanceDialog
             Top = 55,
             Width = 398,
             Height = 430,
-            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right | Forms.AnchorStyles.Bottom
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Bottom
         };
         var settingsPanel = new NumericSettingsPanel
         {
@@ -210,7 +211,7 @@ internal static class AppearanceDialog
             Width = 374,
             Height = 395,
             AutoScroll = true,
-            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right | Forms.AnchorStyles.Bottom
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Bottom
         };
         var settingsTable = new Forms.TableLayoutPanel
         {
@@ -331,28 +332,91 @@ internal static class AppearanceDialog
             const int groupGap = 8;
             var groupWidth = Math.Max(0, dialog.ClientSize.Width - 2 * outerMargin - groupGap);
             var colorWidth = (int)Math.Round(groupWidth * 390.0 / 788.0);
-            colorsGroup.Width = colorWidth;
-            visualGroup.Left = outerMargin + colorWidth + groupGap;
-            visualGroup.Width = Math.Max(0, groupWidth - colorWidth);
-            colorTable.Width = Math.Max(260, colorsGroup.Width - 30);
-            settingsPanel.Width = Math.Max(300, visualGroup.Width - 24);
-            fontCombo.Width = Math.Clamp(
-                (int)Math.Round(settingsPanel.Width * 0.33) - 5,
+            var visualLeft = outerMargin + colorWidth + groupGap;
+            var visualWidth = Math.Max(0, groupWidth - colorWidth);
+            var colorTableWidth = Math.Max(260, colorWidth - 30);
+            var settingsPanelWidth = Math.Max(300, visualWidth - 24);
+            var fontComboWidth = Math.Clamp(
+                (int)Math.Round(settingsPanelWidth * 0.33) - 5,
                 80,
                 120);
-            visualPresetCombo.Width = Math.Max(
+            var visualComboWidth = Math.Max(
                 100,
                 dialog.ClientSize.Width - visualPresetCombo.Left - outerMargin);
+
+            dialog.SuspendLayout();
+            colorsGroup.SuspendLayout();
+            visualGroup.SuspendLayout();
+            colorTable.SuspendLayout();
+            settingsPanel.SuspendLayout();
+            settingsTable.SuspendLayout();
+            try
+            {
+                if (colorsGroup.Width != colorWidth)
+                    colorsGroup.Width = colorWidth;
+                if (visualGroup.Left != visualLeft)
+                    visualGroup.Left = visualLeft;
+                if (visualGroup.Width != visualWidth)
+                    visualGroup.Width = visualWidth;
+                if (colorTable.Width != colorTableWidth)
+                    colorTable.Width = colorTableWidth;
+                if (settingsPanel.Width != settingsPanelWidth)
+                    settingsPanel.Width = settingsPanelWidth;
+                if (fontCombo.Width != fontComboWidth)
+                    fontCombo.Width = fontComboWidth;
+                if (visualPresetCombo.Width != visualComboWidth)
+                    visualPresetCombo.Width = visualComboWidth;
+            }
+            finally
+            {
+                settingsTable.ResumeLayout(true);
+                settingsPanel.ResumeLayout(true);
+                colorTable.ResumeLayout(true);
+                colorsGroup.ResumeLayout(true);
+                visualGroup.ResumeLayout(true);
+                dialog.ResumeLayout(true);
+            }
         }
 
-        dialog.Resize += (_, _) => LayoutResizableControls();
-        dialog.ResizeEnd += (_, _) => RefreshExample();
+        using var resizeLayoutTimer = new Forms.Timer { Interval = 30 };
+        resizeLayoutTimer.Tick += (_, _) =>
+        {
+            resizeLayoutTimer.Stop();
+            LayoutResizableControls();
+            if (!isUserResizing)
+                RefreshExample();
+        };
+        dialog.Resize += (_, _) =>
+        {
+            resizeLayoutTimer.Stop();
+            resizeLayoutTimer.Start();
+        };
+        dialog.ResizeBegin += (_, _) =>
+        {
+            isUserResizing = true;
+            resizeLayoutTimer.Stop();
+        };
+        dialog.ResizeEnd += (_, _) =>
+        {
+            isUserResizing = false;
+            resizeLayoutTimer.Stop();
+            LayoutResizableControls();
+            RefreshExample();
+        };
         LayoutResizableControls();
         dialog.AcceptButton = saveButton;
         dialog.CancelButton = cancelButton;
         dialog.Shown += (_, _) => ApplyNativeTitleBarTheme(dialog, draft);
-        dialog.FormClosed += (_, _) => exampleWindow?.Close();
-        dialog.Move += (_, _) => RefreshExample();
+        dialog.FormClosed += (_, _) =>
+        {
+            resizeLayoutTimer.Stop();
+            exampleWindow?.Close();
+        };
+        dialog.Move += (_, _) =>
+        {
+            if (!isUserResizing)
+                RefreshExample();
+        };
 
         void RefreshExample()
         {
