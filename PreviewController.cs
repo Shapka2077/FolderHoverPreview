@@ -16,6 +16,7 @@ internal sealed class PreviewController : IDisposable
     private readonly List<(Forms.ToolStripMenuItem Item, string Extension)> _formatMenuItems = [];
     private Dictionary<string, string> _folders;
     private PreviewFormatPreferences _formatPreferences;
+    private PreviewThemePreferences _themePreferences;
     private string _configSnapshot;
     private Forms.ToolStripMenuItem? _customFormatsEnabledItem;
     private Forms.ToolStripMenuItem? _configureCustomFormatsItem;
@@ -32,6 +33,7 @@ internal sealed class PreviewController : IDisposable
     private bool _desktopPointerDown;
     private bool _rightButtonDown;
     private bool _customExtensionsDialogOpen;
+    private bool _appearanceDialogOpen;
     private string? _contextFolderPath;
     private int _desktopLayoutRevision;
     private bool _disposed;
@@ -40,6 +42,8 @@ internal sealed class PreviewController : IDisposable
     {
         _folders = folders;
         _formatPreferences = PreviewFormatConfig.Load();
+        _themePreferences = PreviewThemeConfig.Load();
+        _preview.ApplyTheme(_themePreferences);
         _configSnapshot = ReadConfigSnapshot();
 
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
@@ -62,6 +66,7 @@ internal sealed class PreviewController : IDisposable
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Открыть файл настроек", null, (_, _) => OpenConfig());
+        menu.Items.Add("Скины и оформление…", null, (_, _) => ConfigureAppearance());
 
         var formatsMenu = new Forms.ToolStripMenuItem("Форматы превью");
         string? previousFormatGroup = null;
@@ -315,6 +320,8 @@ internal sealed class PreviewController : IDisposable
 
             _folders = PreviewConfig.LoadEnabledDesktopFolders();
             _formatPreferences = PreviewFormatConfig.Load();
+            _themePreferences = PreviewThemeConfig.Load();
+            _preview.ApplyTheme(_themePreferences);
             _configSnapshot = snapshot;
             _lastDesktopPointCheck = 0;
             HidePreview();
@@ -331,7 +338,10 @@ internal sealed class PreviewController : IDisposable
         var formats = File.Exists(PreviewFormatConfig.SettingsPath)
             ? File.ReadAllText(PreviewFormatConfig.SettingsPath)
             : string.Empty;
-        return $"{folders.Length}:{folders}{formats.Length}:{formats}";
+        var theme = File.Exists(PreviewThemeConfig.SettingsPath)
+            ? File.ReadAllText(PreviewThemeConfig.SettingsPath)
+            : string.Empty;
+        return $"{folders.Length}:{folders}{formats.Length}:{formats}{theme.Length}:{theme}";
     }
 
     private void SaveFormatMenuSelection()
@@ -425,6 +435,46 @@ internal sealed class PreviewController : IDisposable
             _configureCustomFormatsItem.Text = count == 0
                 ? "Настроить свои расширения…"
                 : $"Настроить свои расширения… ({count})";
+        }
+    }
+
+    private void ConfigureAppearance()
+    {
+        if (_appearanceDialogOpen)
+            return;
+
+        _appearanceDialogOpen = true;
+        try
+        {
+            var theme = AppearanceDialog.Show(_themePreferences);
+            if (theme is not null)
+                SaveThemePreferences(theme);
+        }
+        finally
+        {
+            _appearanceDialogOpen = false;
+        }
+    }
+
+    private void SaveThemePreferences(PreviewThemePreferences theme)
+    {
+        try
+        {
+            var normalized = PreviewThemeConfig.Normalize(theme);
+            PreviewThemeConfig.Save(normalized);
+            _themePreferences = normalized;
+            _preview.ApplyTheme(_themePreferences);
+            _configSnapshot = ReadConfigSnapshot();
+            _lastDesktopPointCheck = 0;
+            HidePreview();
+        }
+        catch (Exception error)
+        {
+            Forms.MessageBox.Show(
+                $"Не удалось сохранить оформление:\n{error.Message}",
+                "FolderHoverPreview",
+                Forms.MessageBoxButtons.OK,
+                Forms.MessageBoxIcon.Error);
         }
     }
 

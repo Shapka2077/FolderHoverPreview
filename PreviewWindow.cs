@@ -5,23 +5,19 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 
 namespace FolderHoverPreview;
 
 internal sealed class PreviewWindow : Window
 {
-    private static readonly Brush WindowBrush = new SolidColorBrush(Color.FromRgb(0x20, 0x21, 0x24));
-    private static readonly Brush NormalBrush = new SolidColorBrush(Color.FromRgb(0x20, 0x21, 0x24));
-    private static readonly Brush HoverBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x34));
-    private static readonly Brush PressedBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x37, 0x40));
-    private static readonly Brush HoverTextBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xD1, 0x66));
-
     private readonly Border _frame;
     private readonly StackPanel _content;
     private readonly TextBlock _heading;
     private readonly WrapPanel _tiles;
     private readonly TextBlock _emptyMessage;
+    private PreviewThemePreferences _theme = PreviewThemeConfig.Default;
 
     public PreviewWindow()
     {
@@ -38,9 +34,9 @@ internal sealed class PreviewWindow : Window
 
         _heading = new TextBlock
         {
-            Foreground = Brushes.White,
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 15,
+            Foreground = CreateBrush(_theme.HeadingText),
+            FontFamily = new FontFamily(_theme.FontFamily),
+            FontSize = _theme.HeadingFontSize,
             Margin = new Thickness(0, 0, 0, 9),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -48,9 +44,9 @@ internal sealed class PreviewWindow : Window
         _tiles = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Left };
         _emptyMessage = new TextBlock
         {
-            Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 13,
+            Foreground = CreateBrush(_theme.EmptyText),
+            FontFamily = new FontFamily(_theme.FontFamily),
+            FontSize = _theme.EmptyFontSize,
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 260,
             Margin = new Thickness(0, 5, 0, 0),
@@ -64,13 +60,15 @@ internal sealed class PreviewWindow : Window
 
         _frame = new Border
         {
-            Background = WindowBrush,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(18, 15, 18, 15),
+            Background = CreateBrush(_theme.WindowBackground),
+            BorderBrush = CreateBrush(_theme.WindowBorder),
+            BorderThickness = new Thickness(_theme.BorderThickness),
+            CornerRadius = new CornerRadius(_theme.WindowCornerRadius),
+            Padding = new Thickness(_theme.WindowPadding),
             Child = _content
         };
         Content = _frame;
+        ApplyTheme(_theme);
 
         KeyDown += (_, args) =>
         {
@@ -86,6 +84,33 @@ internal sealed class PreviewWindow : Window
             && NativeMethods.GetWindowRect(handle, out var rect)
             && point.X >= rect.Left && point.X <= rect.Right
             && point.Y >= rect.Top && point.Y <= rect.Bottom;
+    }
+
+    public void ApplyTheme(PreviewThemePreferences theme)
+    {
+        _theme = PreviewThemeConfig.Normalize(theme);
+        _frame.Background = CreateBrush(_theme.WindowBackground);
+        _frame.BorderBrush = CreateBrush(_theme.WindowBorder);
+        _frame.BorderThickness = new Thickness(_theme.BorderThickness);
+        _frame.CornerRadius = new CornerRadius(_theme.WindowCornerRadius);
+        _frame.Padding = new Thickness(_theme.WindowPadding);
+        _frame.Effect = _theme.ShadowEnabled
+            ? new DropShadowEffect
+            {
+                Color = PreviewThemeConfig.ParseColor(_theme.ShadowColor),
+                BlurRadius = _theme.ShadowBlur,
+                ShadowDepth = 1,
+                Opacity = _theme.ShadowOpacity
+            }
+            : null;
+        _heading.Foreground = CreateBrush(_theme.HeadingText);
+        _heading.FontSize = _theme.HeadingFontSize;
+        _heading.FontFamily = new FontFamily(_theme.FontFamily);
+        _emptyMessage.Foreground = CreateBrush(_theme.EmptyText);
+        _emptyMessage.FontSize = _theme.EmptyFontSize;
+        _emptyMessage.FontFamily = new FontFamily(_theme.FontFamily);
+        _emptyMessage.MaxWidth = _theme.TileWidth * Math.Min(_theme.MaxColumns, 2);
+        Opacity = _theme.WindowOpacity;
     }
 
     public void ShowFolder(
@@ -104,14 +129,14 @@ internal sealed class PreviewWindow : Window
 
         if (files.Count > 0)
         {
-            var columns = Math.Clamp(files.Count, 1, 4);
-            _tiles.Width = columns * 116;
+            var columns = Math.Clamp(files.Count, 1, _theme.MaxColumns);
+            _tiles.Width = columns * (_theme.TileWidth + _theme.TileSpacing);
             foreach (var file in files)
-                _tiles.Children.Add(CreateTile(file));
+                _tiles.Children.Add(CreateTile(file, _theme));
         }
         else
         {
-            _tiles.Width = 240;
+            _tiles.Width = Math.Min(_theme.TileWidth * Math.Min(_theme.MaxColumns, 2), 480);
         }
 
         _content.Measure(new Size(900, 1600));
@@ -123,7 +148,7 @@ internal sealed class PreviewWindow : Window
             Show();
         UpdateLayout();
         PositionNearFolder(cursor, folderBounds);
-        Opacity = 1;
+        Opacity = _theme.WindowOpacity;
     }
 
     private void PositionNearFolder(NativeMethods.Point cursor, DesktopHit folderBounds)
@@ -247,7 +272,7 @@ internal sealed class PreviewWindow : Window
         return files;
     }
 
-    private static Button CreateTile(string file)
+    private static ThemedButton CreateTile(string file, PreviewThemePreferences theme)
     {
         var label = Path.GetFileName(file) ?? file;
         if (label.EndsWith(".exe.lnk", StringComparison.OrdinalIgnoreCase))
@@ -262,50 +287,55 @@ internal sealed class PreviewWindow : Window
         };
         body.Children.Add(new Image
         {
-            Source = GetFileIcon(file),
-            Width = 38,
-            Height = 38,
+            Source = GetFileIcon(file, theme.IconSize),
+            Width = theme.IconSize,
+            Height = theme.IconSize,
             Stretch = Stretch.Uniform,
-            Margin = new Thickness(0, 0, 0, 4)
+            Margin = new Thickness(0, 0, 0, Math.Max(2, theme.TileSpacing / 2))
         });
         var caption = new TextBlock
         {
             Text = label,
-            Foreground = Brushes.White,
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 12,
+            Foreground = CreateBrush(theme.TileText),
+            FontFamily = new FontFamily(theme.FontFamily),
+            FontSize = theme.TileFontSize,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 54,
-            MaxWidth = 100
+            MaxHeight = Math.Max(30, theme.TileHeight - theme.IconSize - 14),
+            MaxWidth = Math.Max(30, theme.TileWidth - 8)
         };
         body.Children.Add(caption);
 
-        var button = new Button
+        var normalBrush = CreateBrush(theme.TileBackground);
+        var hoverBrush = CreateBrush(theme.TileHoverBackground);
+        var pressedBrush = CreateBrush(theme.TilePressedBackground);
+        var accentBrush = CreateBrush(theme.AccentText);
+        var button = new ThemedButton
         {
             Content = body,
-            Width = 108,
-            MinHeight = 72,
-            Margin = new Thickness(0, 0, 8, 5),
+            Width = theme.TileWidth,
+            MinHeight = theme.TileHeight,
+            Margin = new Thickness(0, 0, theme.TileSpacing, theme.TileSpacing),
             Padding = new Thickness(4),
-            Background = NormalBrush,
+            Background = normalBrush,
+            CornerRadius = new CornerRadius(theme.TileCornerRadius),
             Focusable = false,
             Cursor = Cursors.Hand,
             Style = (Style)System.Windows.Application.Current.FindResource("PreviewTileButton")
         };
         button.MouseEnter += (_, _) =>
         {
-            button.Background = HoverBrush;
-            caption.Foreground = HoverTextBrush;
+            button.Background = hoverBrush;
+            caption.Foreground = accentBrush;
         };
         button.MouseLeave += (_, _) =>
         {
-            button.Background = NormalBrush;
-            caption.Foreground = Brushes.White;
+            button.Background = normalBrush;
+            caption.Foreground = CreateBrush(theme.TileText);
         };
-        button.PreviewMouseDown += (_, _) => button.Background = PressedBrush;
-        button.PreviewMouseUp += (_, _) => button.Background = HoverBrush;
+        button.PreviewMouseDown += (_, _) => button.Background = pressedBrush;
+        button.PreviewMouseUp += (_, _) => button.Background = hoverBrush;
         button.Click += (_, _) =>
         {
             try
@@ -318,8 +348,16 @@ internal sealed class PreviewWindow : Window
         return button;
     }
 
-    private static ImageSource GetFileIcon(string file)
+    private static Brush CreateBrush(string color)
     {
+        var brush = new SolidColorBrush(PreviewThemeConfig.ParseColor(color));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static ImageSource GetFileIcon(string file, double iconSize)
+    {
+        var iconPixels = Math.Clamp((int)Math.Round(iconSize), 16, 128);
         var info = new NativeMethods.ShellFileInfo
         {
             DisplayName = string.Empty,
@@ -337,14 +375,14 @@ internal sealed class PreviewWindow : Window
             return Imaging.CreateBitmapSourceFromHIcon(
                 System.Drawing.SystemIcons.Application.Handle,
                 Int32Rect.Empty,
-                BitmapSizeOptions.FromWidthAndHeight(38, 38));
+                BitmapSizeOptions.FromWidthAndHeight(iconPixels, iconPixels));
 
         try
         {
             var bitmap = Imaging.CreateBitmapSourceFromHIcon(
                 info.Icon,
                 Int32Rect.Empty,
-                BitmapSizeOptions.FromWidthAndHeight(38, 38));
+                BitmapSizeOptions.FromWidthAndHeight(iconPixels, iconPixels));
             bitmap.Freeze();
             return bitmap;
         }
