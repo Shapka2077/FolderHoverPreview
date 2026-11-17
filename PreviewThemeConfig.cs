@@ -30,6 +30,7 @@ internal sealed class PreviewThemePreferences
     public double TileSpacing { get; set; } = 8;
     public double IconSize { get; set; } = 38;
     public double HeadingFontSize { get; set; } = 15;
+    public bool HeadingEnabled { get; set; } = true;
     public double TileFontSize { get; set; } = 12;
     public double EmptyFontSize { get; set; } = 13;
     public string FontFamily { get; set; } = "Segoe UI";
@@ -446,21 +447,21 @@ internal static class PreviewThemeConfig
         normalized.TileText = NormalizeColor(normalized.TileText, "#FFFFFF");
         normalized.AccentText = NormalizeColor(normalized.AccentText, "#FFD166");
         normalized.WindowOpacity = Clamp(normalized.WindowOpacity, 0.45, 1.0, 1.0);
-        normalized.WindowPadding = Clamp(normalized.WindowPadding, 4, 40, 15);
-        normalized.WindowCornerRadius = Clamp(normalized.WindowCornerRadius, 0, 28, 8);
-        normalized.BorderThickness = Clamp(normalized.BorderThickness, 0, 4, 1);
-        normalized.TileWidth = Clamp(normalized.TileWidth, 78, 220, 108);
-        normalized.TileHeight = Clamp(normalized.TileHeight, 58, 180, 72);
-        normalized.TileCornerRadius = Clamp(normalized.TileCornerRadius, 0, 30, 6);
-        normalized.TileSpacing = Clamp(normalized.TileSpacing, 0, 24, 8);
-        normalized.IconSize = Clamp(normalized.IconSize, 24, 96, 38);
-        normalized.HeadingFontSize = Clamp(normalized.HeadingFontSize, 10, 28, 15);
-        normalized.TileFontSize = Clamp(normalized.TileFontSize, 8, 24, 12);
-        normalized.EmptyFontSize = Clamp(normalized.EmptyFontSize, 8, 24, 13);
+        normalized.WindowPadding = Clamp(normalized.WindowPadding, 0, 100, 15);
+        normalized.WindowCornerRadius = Clamp(normalized.WindowCornerRadius, 0, 120, 8);
+        normalized.BorderThickness = Clamp(normalized.BorderThickness, 0, 12, 1);
+        normalized.TileWidth = Clamp(normalized.TileWidth, 48, 360, 108);
+        normalized.TileHeight = Clamp(normalized.TileHeight, 32, 300, 72);
+        normalized.TileCornerRadius = Clamp(normalized.TileCornerRadius, 0, 120, 6);
+        normalized.TileSpacing = Clamp(normalized.TileSpacing, 0, 80, 8);
+        normalized.IconSize = Clamp(normalized.IconSize, 8, 192, 38);
+        normalized.HeadingFontSize = Clamp(normalized.HeadingFontSize, 6, 48, 15);
+        normalized.TileFontSize = Clamp(normalized.TileFontSize, 6, 40, 12);
+        normalized.EmptyFontSize = Clamp(normalized.EmptyFontSize, 6, 40, 13);
         if (!FontFamilies.Contains(normalized.FontFamily, StringComparer.Ordinal))
             normalized.FontFamily = "Segoe UI";
-        normalized.MaxColumns = Math.Clamp(normalized.MaxColumns, 1, 8);
-        normalized.ShadowBlur = Clamp(normalized.ShadowBlur, 0, 40, 18);
+        normalized.MaxColumns = Math.Clamp(normalized.MaxColumns, 1, 16);
+        normalized.ShadowBlur = Clamp(normalized.ShadowBlur, 0, 100, 18);
         normalized.ShadowOpacity = Clamp(normalized.ShadowOpacity, 0, 0.8, 0.35);
         return normalized;
     }

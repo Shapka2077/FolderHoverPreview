@@ -23,11 +23,12 @@ internal static class AppearanceDialog
         {
             Text = "Скины и оформление FolderHoverPreview",
             StartPosition = Forms.FormStartPosition.CenterScreen,
-            FormBorderStyle = Forms.FormBorderStyle.FixedDialog,
+            FormBorderStyle = Forms.FormBorderStyle.Sizable,
             MinimizeBox = false,
             MaximizeBox = false,
             ShowInTaskbar = false,
             ClientSize = new Size(820, 550),
+            MinimumSize = new Size(740, 590),
             Font = new Font("Segoe UI", 9)
         };
         using var toolTip = new Forms.ToolTip
@@ -91,6 +92,7 @@ internal static class AppearanceDialog
             Left = visualPresetLabel.Right + 8,
             Top = 16,
             Width = dialog.ClientSize.Width - visualPresetLabel.Right - 24,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right,
             DropDownStyle = Forms.ComboBoxStyle.DropDownList
         };
         visualPresetCombo.Items.AddRange(visualPresetChoices);
@@ -117,7 +119,8 @@ internal static class AppearanceDialog
             Left = 12,
             Top = 55,
             Width = 390,
-            Height = 430
+            Height = 430,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Bottom
         };
         var colorFields = new[]
         {
@@ -138,6 +141,7 @@ internal static class AppearanceDialog
             Top = 24,
             Width = 360,
             Height = colorFields.Length * 38,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right,
             ColumnCount = 2,
             RowCount = colorFields.Length,
             AutoSize = false
@@ -196,15 +200,17 @@ internal static class AppearanceDialog
             Left = 410,
             Top = 55,
             Width = 398,
-            Height = 430
+            Height = 430,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right | Forms.AnchorStyles.Bottom
         };
-        var settingsPanel = new Forms.Panel
+        var settingsPanel = new NumericSettingsPanel
         {
             Left = 10,
             Top = 23,
             Width = 374,
             Height = 395,
-            AutoScroll = true
+            AutoScroll = true,
+            Anchor = Forms.AnchorStyles.Top | Forms.AnchorStyles.Left | Forms.AnchorStyles.Right | Forms.AnchorStyles.Bottom
         };
         var settingsTable = new Forms.TableLayoutPanel
         {
@@ -220,22 +226,46 @@ internal static class AppearanceDialog
         var numericInputs = new Dictionary<string, Forms.NumericUpDown>(StringComparer.Ordinal);
         var fontCombo = AddFontSetting(settingsTable, toolTip, draft.FontFamily, value => draft.FontFamily = value, MarkCustomVisual);
         EnableThemeComboBox(fontCombo, () => draft);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Прозрачность окна", "opacity", 45, 100, 5, 0, draft.WindowOpacity * 100, value => draft.WindowOpacity = (double)value / 100, "%", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Отступы окна", "padding", 4, 40, 1, 0, draft.WindowPadding, value => draft.WindowPadding = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Скругление окна", "windowRadius", 0, 28, 1, 0, draft.WindowCornerRadius, value => draft.WindowCornerRadius = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Толщина рамки", "border", 0, 4, 0.5m, 1, draft.BorderThickness, value => draft.BorderThickness = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Ширина плитки", "tileWidth", 78, 220, 4, 0, draft.TileWidth, value => draft.TileWidth = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Высота плитки", "tileHeight", 58, 180, 4, 0, draft.TileHeight, value => draft.TileHeight = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Скругление плиток", "tileRadius", 0, 30, 1, 0, draft.TileCornerRadius, value => draft.TileCornerRadius = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Расстояние между плитками", "tileSpacing", 0, 24, 1, 0, draft.TileSpacing, value => draft.TileSpacing = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер значка", "iconSize", 24, 96, 2, 0, draft.IconSize, value => draft.IconSize = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер заголовка", "headingFont", 10, 28, 1, 0, draft.HeadingFontSize, value => draft.HeadingFontSize = (double)value, "pt", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер подписи", "tileFont", 8, 24, 1, 0, draft.TileFontSize, value => draft.TileFontSize = (double)value, "pt", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер сообщения", "emptyFont", 8, 24, 1, 0, draft.EmptyFontSize, value => draft.EmptyFontSize = (double)value, "pt", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Колонок плиток", "columns", 1, 8, 1, 0, draft.MaxColumns, value => draft.MaxColumns = decimal.ToInt32(value), "", MarkCustomVisual);
-        AddCheckboxSetting(settingsTable, toolTip, "Тень окна", draft.ShadowEnabled, value => draft.ShadowEnabled = value, MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размытие тени", "shadowBlur", 0, 40, 1, 0, draft.ShadowBlur, value => draft.ShadowBlur = (double)value, "px", MarkCustomVisual);
-        AddNumericSetting(settingsTable, toolTip, numericInputs, "Непрозрачность тени", "shadowOpacity", 0, 80, 5, 0, draft.ShadowOpacity * 100, value => draft.ShadowOpacity = (double)value / 100, "%", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Прозрачность окна", "opacity", 45, 100, 1, 0, draft.WindowOpacity * 100, value => draft.WindowOpacity = (double)value / 100, "%", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Отступы окна", "padding", 0, 100, 0.5m, 1, draft.WindowPadding, value => draft.WindowPadding = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Скругление окна", "windowRadius", 0, 120, 0.5m, 1, draft.WindowCornerRadius, value => draft.WindowCornerRadius = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Толщина рамки", "border", 0, 12, 0.5m, 1, draft.BorderThickness, value => draft.BorderThickness = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Ширина плитки", "tileWidth", 48, 360, 0.5m, 1, draft.TileWidth, value => draft.TileWidth = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Высота плитки", "tileHeight", 32, 300, 0.5m, 1, draft.TileHeight, value => draft.TileHeight = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Скругление плиток", "tileRadius", 0, 120, 0.5m, 1, draft.TileCornerRadius, value => draft.TileCornerRadius = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Расстояние между плитками", "tileSpacing", 0, 80, 0.5m, 1, draft.TileSpacing, value => draft.TileSpacing = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер значка", "iconSize", 8, 192, 0.5m, 1, draft.IconSize, value => draft.IconSize = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер заголовка", "headingFont", 6, 48, 0.5m, 1, draft.HeadingFontSize, value => draft.HeadingFontSize = (double)value, "pt", MarkCustomVisual);
+        var headingVisibilityCheckBox = AddCheckboxSetting(
+            settingsTable,
+            toolTip,
+            "Показывать заголовок папки",
+            draft.HeadingEnabled,
+            value => draft.HeadingEnabled = value,
+            "Включает или скрывает название папки в верхней части окна превью.",
+            MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер подписи", "tileFont", 6, 40, 0.5m, 1, draft.TileFontSize, value => draft.TileFontSize = (double)value, "pt", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размер сообщения", "emptyFont", 6, 40, 0.5m, 1, draft.EmptyFontSize, value => draft.EmptyFontSize = (double)value, "pt", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Колонок плиток", "columns", 1, 16, 1, 0, draft.MaxColumns, value => draft.MaxColumns = decimal.ToInt32(value), "", MarkCustomVisual);
+        var shadowEnabledCheckBox = AddCheckboxSetting(
+            settingsTable,
+            toolTip,
+            "Тень окна",
+            draft.ShadowEnabled,
+            value => draft.ShadowEnabled = value,
+            "Включает или выключает встроенную тень окна превью.",
+            MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Размытие тени", "shadowBlur", 0, 100, 1, 0, draft.ShadowBlur, value => draft.ShadowBlur = (double)value, "px", MarkCustomVisual);
+        AddNumericSetting(settingsTable, toolTip, numericInputs, "Непрозрачность тени", "shadowOpacity", 0, 80, 1, 0, draft.ShadowOpacity * 100, value => draft.ShadowOpacity = (double)value / 100, "%", MarkCustomVisual);
+        foreach (var editor in numericInputs.Values)
+        {
+            editor.Enter += (_, _) => settingsPanel.ActiveEditor = (SmoothNumericUpDown)editor;
+            editor.Leave += (_, _) =>
+            {
+                if (ReferenceEquals(settingsPanel.ActiveEditor, editor) && !editor.ContainsFocus)
+                    settingsPanel.ActiveEditor = null;
+            };
+        }
         settingsPanel.Controls.Add(settingsTable);
         visualGroup.Controls.Add(settingsPanel);
 
@@ -246,18 +276,21 @@ internal static class AppearanceDialog
             Left = 18,
             Top = 500,
             Width = 210,
-            Height = 32
+            Height = 32,
+            Anchor = Forms.AnchorStyles.Bottom | Forms.AnchorStyles.Left
         };
         toolTip.SetToolTip(
             resetButton,
             "Вернуть исходные цвета, размеры, шрифт и эффекты. Изменения применятся после нажатия «Сохранить».");
         var exampleButton = new Forms.Button
         {
+            Name = "ShowExampleButton",
             Text = "Показать пример",
             Left = 245,
             Top = 500,
             Width = 190,
-            Height = 32
+            Height = 32,
+            Anchor = Forms.AnchorStyles.Bottom | Forms.AnchorStyles.Left
         };
         toolTip.SetToolTip(
             exampleButton,
@@ -269,7 +302,8 @@ internal static class AppearanceDialog
             Left = 584,
             Top = 500,
             Width = 100,
-            Height = 32
+            Height = 32,
+            Anchor = Forms.AnchorStyles.Bottom | Forms.AnchorStyles.Right
         };
         var cancelButton = new Forms.Button
         {
@@ -279,6 +313,7 @@ internal static class AppearanceDialog
             Top = 500,
             Width = 100,
             Height = 32,
+            Anchor = Forms.AnchorStyles.Bottom | Forms.AnchorStyles.Right,
             DialogResult = Forms.DialogResult.Cancel
         };
         dialog.Controls.AddRange(
@@ -290,6 +325,29 @@ internal static class AppearanceDialog
             saveButton,
             cancelButton
         ]);
+        void LayoutResizableControls()
+        {
+            const int outerMargin = 12;
+            const int groupGap = 8;
+            var groupWidth = Math.Max(0, dialog.ClientSize.Width - 2 * outerMargin - groupGap);
+            var colorWidth = (int)Math.Round(groupWidth * 390.0 / 788.0);
+            colorsGroup.Width = colorWidth;
+            visualGroup.Left = outerMargin + colorWidth + groupGap;
+            visualGroup.Width = Math.Max(0, groupWidth - colorWidth);
+            colorTable.Width = Math.Max(260, colorsGroup.Width - 30);
+            settingsPanel.Width = Math.Max(300, visualGroup.Width - 24);
+            fontCombo.Width = Math.Clamp(
+                (int)Math.Round(settingsPanel.Width * 0.33) - 5,
+                80,
+                120);
+            visualPresetCombo.Width = Math.Max(
+                100,
+                dialog.ClientSize.Width - visualPresetCombo.Left - outerMargin);
+        }
+
+        dialog.Resize += (_, _) => LayoutResizableControls();
+        dialog.ResizeEnd += (_, _) => RefreshExample();
+        LayoutResizableControls();
         dialog.AcceptButton = saveButton;
         dialog.CancelButton = cancelButton;
         dialog.Shown += (_, _) => ApplyNativeTitleBarTheme(dialog, draft);
@@ -299,7 +357,7 @@ internal static class AppearanceDialog
         void RefreshExample()
         {
             if (exampleWindow?.IsVisible == true)
-                exampleWindow.ShowExample(draft, dialog.Bounds);
+                exampleWindow.ShowExample(draft, dialog.Bounds, dialog.Handle);
         }
 
         void UpdateColorControls()
@@ -313,8 +371,8 @@ internal static class AppearanceDialog
             foreach (var (key, input) in numericInputs)
                 SetNumericValue(input, (decimal)ReadNumericValue(key, draft));
             fontCombo.SelectedItem = draft.FontFamily;
-            foreach (Forms.CheckBox checkBox in settingsTable.Controls.OfType<Forms.CheckBox>())
-                checkBox.Checked = draft.ShadowEnabled;
+            headingVisibilityCheckBox.Checked = draft.HeadingEnabled;
+            shadowEnabledCheckBox.Checked = draft.ShadowEnabled;
         }
 
         void MarkCustomColors()
@@ -448,7 +506,7 @@ internal static class AppearanceDialog
                         ? "Скрыть пример"
                         : "Показать пример";
             }
-            exampleWindow.ShowExample(draft, dialog.Bounds);
+            exampleWindow.ShowExample(draft, dialog.Bounds, dialog.Handle);
         };
         saveButton.Click += (_, _) =>
         {
@@ -491,19 +549,27 @@ internal static class AppearanceDialog
         toolTip.SetToolTip(labelControl, GetNumericTooltip(key));
         table.Controls.Add(labelControl, 0, row);
 
-        var editor = new Forms.NumericUpDown
+        var editor = new SmoothNumericUpDown
         {
+            Name = key,
             Minimum = minimum,
             Maximum = maximum,
             Increment = increment,
             DecimalPlaces = decimals,
+            WheelNotchesPerStep = key == "columns" ? 2 : 1,
             Width = string.IsNullOrEmpty(unit) ? 74 : 86,
             Anchor = Forms.AnchorStyles.Left,
             Margin = new Forms.Padding(0, 4, 0, 3)
         };
         SetNumericValue(editor, (decimal)value);
         editor.ValueChanged += (_, _) => changed(editor.Value);
-        toolTip.SetToolTip(editor, GetNumericTooltip(key));
+        toolTip.SetToolTip(
+            editor,
+            GetNumericTooltip(key)
+            + Environment.NewLine
+            + (key == "columns"
+                ? "Колёсико меняет число колонок раз в два деления, чтобы избежать случайных скачков."
+                : $"Шаг колёсика: {increment.ToString(System.Globalization.CultureInfo.CurrentCulture)}; стрелки меняют значение на один шаг."));
         inputs.Add(key, editor);
 
         var cell = new Forms.FlowLayoutPanel
@@ -527,12 +593,13 @@ internal static class AppearanceDialog
         editor.ValueChanged += (_, _) => markCustom();
     }
 
-    private static void AddCheckboxSetting(
+    private static Forms.CheckBox AddCheckboxSetting(
         Forms.TableLayoutPanel table,
         Forms.ToolTip toolTip,
         string label,
         bool isChecked,
         Action<bool> changed,
+        string description,
         Action markCustom)
     {
         var row = table.RowCount++;
@@ -552,9 +619,10 @@ internal static class AppearanceDialog
         };
         toolTip.SetToolTip(
             checkBox,
-            "Включает или выключает встроенную тень окна превью. Её размытие и насыщенность настраиваются ниже.");
+            description);
         table.Controls.Add(checkBox, 0, row);
         table.SetColumnSpan(checkBox, 2);
+        return checkBox;
     }
 
     private static Forms.ComboBox AddFontSetting(
@@ -717,6 +785,7 @@ internal static class AppearanceDialog
         destination.TileSpacing = source.TileSpacing;
         destination.IconSize = source.IconSize;
         destination.HeadingFontSize = source.HeadingFontSize;
+        destination.HeadingEnabled = source.HeadingEnabled;
         destination.TileFontSize = source.TileFontSize;
         destination.EmptyFontSize = source.EmptyFontSize;
         destination.FontFamily = source.FontFamily;
@@ -865,6 +934,62 @@ internal static class AppearanceDialog
 
     private static void SetNumericValue(Forms.NumericUpDown input, decimal value) =>
         input.Value = Math.Clamp(value, input.Minimum, input.Maximum);
+
+    private sealed class NumericSettingsPanel : Forms.Panel
+    {
+        private const int WmMouseWheel = 0x020A;
+
+        public SmoothNumericUpDown? ActiveEditor { get; set; }
+
+        protected override void WndProc(ref Forms.Message message)
+        {
+            if (message.Msg == WmMouseWheel && ActiveEditor?.ContainsFocus == true)
+            {
+                ActiveEditor.ApplyWheelDelta(unchecked((short)(message.WParam.ToInt64() >> 16)));
+                message.Result = IntPtr.Zero;
+                return;
+            }
+
+            base.WndProc(ref message);
+        }
+    }
+
+    private sealed class SmoothNumericUpDown : Forms.NumericUpDown
+    {
+        private const int WmMouseWheel = 0x020A;
+        private int _wheelDelta;
+        public int WheelNotchesPerStep { get; set; } = 1;
+
+        internal void ApplyWheelDelta(int delta)
+        {
+            _wheelDelta += delta;
+            var threshold = Math.Max(1, WheelNotchesPerStep) * 120;
+            var steps = _wheelDelta / threshold;
+            if (steps == 0)
+                return;
+
+            _wheelDelta -= steps * threshold;
+            Value = Math.Clamp(Value + Increment * steps, Minimum, Maximum);
+        }
+
+        protected override void WndProc(ref Forms.Message message)
+        {
+            if (message.Msg == WmMouseWheel && ContainsFocus)
+            {
+                ApplyWheelDelta(unchecked((short)(message.WParam.ToInt64() >> 16)));
+                message.Result = IntPtr.Zero;
+                return;
+            }
+
+            base.WndProc(ref message);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _wheelDelta = 0;
+            base.OnMouseLeave(e);
+        }
+    }
 
     private static void UpdateColorButton(Forms.Button button, string value)
     {

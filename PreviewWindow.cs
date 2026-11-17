@@ -18,6 +18,8 @@ internal sealed class PreviewWindow : Window
     private readonly WrapPanel _tiles;
     private readonly TextBlock _emptyMessage;
     private PreviewThemePreferences _theme = PreviewThemeConfig.Default;
+    private ImageSource? _exampleIcon;
+    private int _exampleIconPixels;
 
     public PreviewWindow()
     {
@@ -106,6 +108,7 @@ internal sealed class PreviewWindow : Window
         _heading.Foreground = CreateBrush(_theme.HeadingText);
         _heading.FontSize = _theme.HeadingFontSize;
         _heading.FontFamily = new FontFamily(_theme.FontFamily);
+        _heading.Visibility = _theme.HeadingEnabled ? Visibility.Visible : Visibility.Collapsed;
         _emptyMessage.Foreground = CreateBrush(_theme.EmptyText);
         _emptyMessage.FontSize = _theme.EmptyFontSize;
         _emptyMessage.FontFamily = new FontFamily(_theme.FontFamily);
@@ -149,8 +152,15 @@ internal sealed class PreviewWindow : Window
         Opacity = _theme.WindowOpacity;
     }
 
-    public void ShowExample(PreviewThemePreferences theme, System.Drawing.Rectangle dialogBounds)
+    public void ShowExample(
+        PreviewThemePreferences theme,
+        System.Drawing.Rectangle dialogBounds,
+        IntPtr ownerHandle)
     {
+        var wasVisible = IsVisible;
+        Topmost = false;
+        if (!wasVisible && ownerHandle != IntPtr.Zero)
+            new WindowInteropHelper(this).Owner = ownerHandle;
         ApplyTheme(theme);
         _heading.Text = "Пример папки";
         _tiles.Children.Clear();
@@ -167,26 +177,38 @@ internal sealed class PreviewWindow : Window
         ];
         var columns = Math.Clamp(labels.Length, 1, _theme.MaxColumns);
         _tiles.Width = columns * (_theme.TileWidth + _theme.TileSpacing);
-        var icon = GetFileIcon(Environment.ProcessPath ?? "", _theme.IconSize);
+        var iconPixels = Math.Clamp((int)Math.Round(_theme.IconSize), 16, 128);
+        if (_exampleIcon is null || _exampleIconPixels != iconPixels)
+        {
+            _exampleIcon = GetFileIcon(Environment.ProcessPath ?? "", _theme.IconSize);
+            _exampleIconPixels = iconPixels;
+        }
         foreach (var label in labels)
-            _tiles.Children.Add(PreviewTileFactory.Create(label, _theme, icon));
+            _tiles.Children.Add(PreviewTileFactory.Create(label, _theme, _exampleIcon));
 
         MeasureContent();
-        Opacity = 0;
-        if (!IsVisible)
-            Show();
-        UpdateLayout();
-        var bounds = new DesktopHit(
+        var exampleCursor = new NativeMethods.Point
+        {
+            X = dialogBounds.Left + dialogBounds.Width / 2,
+            Y = dialogBounds.Top + dialogBounds.Height / 2
+        };
+        var exampleBounds = new DesktopHit(
             "",
             dialogBounds.Left,
             dialogBounds.Top,
             dialogBounds.Right,
             dialogBounds.Bottom);
-        PositionNearFolder(new NativeMethods.Point
+        if (wasVisible)
         {
-            X = dialogBounds.Left + dialogBounds.Width / 2,
-            Y = dialogBounds.Top + dialogBounds.Height / 2
-        }, bounds);
+            UpdateLayout();
+            PositionNearFolder(exampleCursor, exampleBounds, prepareMonitorDpi: false);
+            return;
+        }
+
+        Opacity = 0;
+        Show();
+        UpdateLayout();
+        PositionNearFolder(exampleCursor, exampleBounds);
         Opacity = _theme.WindowOpacity;
     }
 
@@ -201,23 +223,29 @@ internal sealed class PreviewWindow : Window
             + _frame.BorderThickness.Top + _frame.BorderThickness.Bottom;
     }
 
-    private void PositionNearFolder(NativeMethods.Point cursor, DesktopHit folderBounds)
+    private void PositionNearFolder(
+        NativeMethods.Point cursor,
+        DesktopHit folderBounds,
+        bool prepareMonitorDpi = true)
     {
         var handle = new WindowInteropHelper(this).Handle;
         if (handle == IntPtr.Zero)
             return;
 
-        // Put the invisible window on the pointer's monitor first so WPF
-        // receives the monitor's DPI before calculating its final bounds.
-        NativeMethods.SetWindowPos(
-            handle,
-            IntPtr.Zero,
-            cursor.X + 16,
-            cursor.Y + 12,
-            0,
-            0,
-            NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
-        UpdateLayout();
+        if (prepareMonitorDpi)
+        {
+            // Place the invisible window on the pointer's monitor first so WPF
+            // receives that monitor's DPI before calculating its final bounds.
+            NativeMethods.SetWindowPos(
+                handle,
+                IntPtr.Zero,
+                cursor.X + 16,
+                cursor.Y + 12,
+                0,
+                0,
+                NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
+            UpdateLayout();
+        }
 
         var monitor = NativeMethods.MonitorFromPoint(cursor, 2);
         var monitorInfo = new NativeMethods.MonitorInfo { Size = Marshal.SizeOf<NativeMethods.MonitorInfo>() };
