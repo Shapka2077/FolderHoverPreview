@@ -24,13 +24,13 @@
 Для сборки нужен **.NET 8 SDK** и Windows:
 
 ```powershell
-dotnet publish .\FolderHoverPreview.csproj -c Release -o .\dist -p:SelfContained=false
+dotnet publish .\FolderHoverPreview.csproj -c Release -o .\dist
 ```
 
-**Версия 3.0 — облегчённая, framework-dependent сборка.** В `dist` публикуются
-отдельные файлы приложения; переносить нужно всю папку. На целевом компьютере
-Windows x64 должен быть установлен **.NET 8 Desktop Runtime**. AutoHotkey не
-нужен. Запустите `dist\FolderHoverPreview.exe`. При старте программа
+**Версия 4.0 — автономная сборка для Windows x64.** Публикация создаёт один
+сжатый `dist\FolderHoverPreview.exe` со встроенным .NET 8; на компьютере
+пользователя не нужно отдельно устанавливать .NET или AutoHotkey. Передавайте
+только этот `.exe`. При старте программа
 регистрирует контекстный пункт в `HKCU\Software\Classes` и работает в фоне.
 Второй запуск не создаёт ещё один экземпляр. Чтобы выключить программу,
 нажмите правой кнопкой по её значку в области уведомлений и выберите «Выход».
