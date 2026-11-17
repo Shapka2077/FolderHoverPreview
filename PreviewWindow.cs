@@ -139,13 +139,7 @@ internal sealed class PreviewWindow : Window
             _tiles.Width = Math.Min(_theme.TileWidth * Math.Min(_theme.MaxColumns, 2), 480);
         }
 
-        _content.Measure(new Size(900, 1600));
-        Width = _content.DesiredSize.Width
-            + _frame.Padding.Left + _frame.Padding.Right
-            + _frame.BorderThickness.Left + _frame.BorderThickness.Right;
-        Height = _content.DesiredSize.Height
-            + _frame.Padding.Top + _frame.Padding.Bottom
-            + _frame.BorderThickness.Top + _frame.BorderThickness.Bottom;
+        MeasureContent();
 
         Opacity = 0;
         if (!IsVisible)
@@ -153,6 +147,58 @@ internal sealed class PreviewWindow : Window
         UpdateLayout();
         PositionNearFolder(cursor, folderBounds);
         Opacity = _theme.WindowOpacity;
+    }
+
+    public void ShowExample(PreviewThemePreferences theme, System.Drawing.Rectangle dialogBounds)
+    {
+        ApplyTheme(theme);
+        _heading.Text = "Пример папки";
+        _tiles.Children.Clear();
+        _emptyMessage.Visibility = Visibility.Collapsed;
+        _tiles.Visibility = Visibility.Visible;
+        string[] labels =
+        [
+            "Программа 1",
+            "Программа 2",
+            "Программа 3",
+            "Программа 4",
+            "Программа 5",
+            "Программа 6"
+        ];
+        var columns = Math.Clamp(labels.Length, 1, _theme.MaxColumns);
+        _tiles.Width = columns * (_theme.TileWidth + _theme.TileSpacing);
+        var icon = GetFileIcon(Environment.ProcessPath ?? "", _theme.IconSize);
+        foreach (var label in labels)
+            _tiles.Children.Add(PreviewTileFactory.Create(label, _theme, icon));
+
+        MeasureContent();
+        Opacity = 0;
+        if (!IsVisible)
+            Show();
+        UpdateLayout();
+        var bounds = new DesktopHit(
+            "",
+            dialogBounds.Left,
+            dialogBounds.Top,
+            dialogBounds.Right,
+            dialogBounds.Bottom);
+        PositionNearFolder(new NativeMethods.Point
+        {
+            X = dialogBounds.Left + dialogBounds.Width / 2,
+            Y = dialogBounds.Top + dialogBounds.Height / 2
+        }, bounds);
+        Opacity = _theme.WindowOpacity;
+    }
+
+    private void MeasureContent()
+    {
+        _content.Measure(new Size(900, 1600));
+        Width = _content.DesiredSize.Width
+            + _frame.Padding.Left + _frame.Padding.Right
+            + _frame.BorderThickness.Left + _frame.BorderThickness.Right;
+        Height = _content.DesiredSize.Height
+            + _frame.Padding.Top + _frame.Padding.Bottom
+            + _frame.BorderThickness.Top + _frame.BorderThickness.Bottom;
     }
 
     private void PositionNearFolder(NativeMethods.Point cursor, DesktopHit folderBounds)

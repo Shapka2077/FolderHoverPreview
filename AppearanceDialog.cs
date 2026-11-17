@@ -42,6 +42,7 @@ internal static class AppearanceDialog
         var savedTheme = draft.Clone();
         var isLoading = false;
         PreviewThemePreferences? result = null;
+        PreviewWindow? exampleWindow = null;
         var colorPresetChoices = PreviewThemeConfig.ColorPresets
             .Select(preset => new PresetChoice(preset.Id, preset.Name))
             .ToArray();
@@ -250,6 +251,17 @@ internal static class AppearanceDialog
         toolTip.SetToolTip(
             resetButton,
             "Вернуть исходные цвета, размеры, шрифт и эффекты. Изменения применятся после нажатия «Сохранить».");
+        var exampleButton = new Forms.Button
+        {
+            Text = "Показать пример",
+            Left = 245,
+            Top = 500,
+            Width = 190,
+            Height = 32
+        };
+        toolTip.SetToolTip(
+            exampleButton,
+            "Открыть настоящее окно превью с примерами файлов в натуральную величину. Изменения в настройках сразу отразятся в нём.");
         var saveButton = new Forms.Button
         {
             Name = "SaveButton",
@@ -274,12 +286,21 @@ internal static class AppearanceDialog
             colorsGroup,
             visualGroup,
             resetButton,
+            exampleButton,
             saveButton,
             cancelButton
         ]);
         dialog.AcceptButton = saveButton;
         dialog.CancelButton = cancelButton;
         dialog.Shown += (_, _) => ApplyNativeTitleBarTheme(dialog, draft);
+        dialog.FormClosed += (_, _) => exampleWindow?.Close();
+        dialog.Move += (_, _) => RefreshExample();
+
+        void RefreshExample()
+        {
+            if (exampleWindow?.IsVisible == true)
+                exampleWindow.ShowExample(draft, dialog.Bounds);
+        }
 
         void UpdateColorControls()
         {
@@ -307,6 +328,7 @@ internal static class AppearanceDialog
             colorPresetCombo.SelectedItem = colorPresetChoices[^1];
             isLoading = false;
             ApplyDialogTheme(dialog, draft, toolTip);
+            RefreshExample();
         }
 
         void MarkCustomVisual()
@@ -318,6 +340,7 @@ internal static class AppearanceDialog
             isLoading = true;
             visualPresetCombo.SelectedItem = visualPresetChoices[^1];
             isLoading = false;
+            RefreshExample();
         }
 
         void LoadColorPreset(string presetId)
@@ -347,8 +370,8 @@ internal static class AppearanceDialog
             }
 
             ApplyDialogTheme(dialog, draft, toolTip);
+            RefreshExample();
         }
-
         void LoadVisualPreset(string presetId)
         {
             isLoading = true;
@@ -365,7 +388,6 @@ internal static class AppearanceDialog
                     CopyVisualSettings(draft, preset.Theme);
                     draft.VisualPresetId = preset.Id;
                 }
-
                 visualPresetCombo.SelectedItem = visualPresetChoices.First(choice => choice.Id == presetId);
                 UpdateVisualControls();
             }
@@ -373,7 +395,7 @@ internal static class AppearanceDialog
             {
                 isLoading = false;
             }
-
+            RefreshExample();
         }
 
         void LoadFullTheme(PreviewThemePreferences theme)
@@ -395,6 +417,7 @@ internal static class AppearanceDialog
             }
 
             ApplyDialogTheme(dialog, draft, toolTip);
+            RefreshExample();
         }
 
         colorPresetCombo.SelectedValueChanged += (_, _) =>
@@ -408,6 +431,25 @@ internal static class AppearanceDialog
                 LoadVisualPreset(choice.Id);
         };
         resetButton.Click += (_, _) => LoadFullTheme(PreviewThemeConfig.Default);
+        exampleButton.Click += (_, _) =>
+        {
+            if (exampleWindow?.IsVisible == true)
+            {
+                exampleWindow.Hide();
+                exampleButton.Text = "Показать пример";
+                return;
+            }
+
+            if (exampleWindow is null)
+            {
+                exampleWindow = new PreviewWindow();
+                exampleWindow.IsVisibleChanged += (_, _) =>
+                    exampleButton.Text = exampleWindow.IsVisible
+                        ? "Скрыть пример"
+                        : "Показать пример";
+            }
+            exampleWindow.ShowExample(draft, dialog.Bounds);
+        };
         saveButton.Click += (_, _) =>
         {
             result = PreviewThemeConfig.Normalize(draft);
