@@ -101,8 +101,7 @@ internal static class PreviewConfig
 
     public static string? FindDesktopFolderPath(string folderName)
     {
-        // Prefer the user's Desktop when a shared and a personal folder have
-        // the same name, matching the original AHK directory map behavior.
+        // The personal Desktop takes precedence for duplicate folder names.
         foreach (var desktop in new[]
                  {
                      Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
