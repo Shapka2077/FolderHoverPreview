@@ -6,7 +6,27 @@ namespace FolderHoverPreview;
 internal static class PreviewConfig
 {
     private const string ConfigMutexName = @"Local\ShapkaFolderHoverPreviewConfigCSharp";
+    private const string ConfigTitle = "# FolderHoverPreview — список включённых папок";
     private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+    private static readonly string[] ConfigHeader =
+    {
+        ConfigTitle,
+        "#",
+        "# Каждая строка без # в начале — полный путь к одной папке.",
+        "# Папки, перечисленные ниже, включены; все остальные — выключены.",
+        "#",
+        "# Как изменить список:",
+        "#   • Чтобы включить папку — добавьте её полный путь отдельной строкой.",
+        "#   • Чтобы выключить — удалите строку или поставьте # в её начале.",
+        "#   • Пустые строки и строки, начинающиеся с #, игнорируются.",
+        "#",
+        "# Поддерживаются папки на Рабочем столе пользователя и на общем",
+        "# Рабочем столе Windows. Для быстрого переключения используйте пункт",
+        "# «Превью при наведении» в контекстном меню папки в Проводнике.",
+        "#",
+        "# ── ВКЛЮЧЁННЫЕ ПАПКИ ──",
+        "# Укажите ниже по одному полному пути к папке на строку:"
+    };
 
     public static string ConfigPath
     {
@@ -21,13 +41,15 @@ internal static class PreviewConfig
 
     public static void EnsureCreated()
     {
-        if (File.Exists(ConfigPath))
-            return;
-
         WithConfigLock(() =>
         {
             if (!File.Exists(ConfigPath))
+            {
                 WritePaths(Array.Empty<string>());
+                return;
+            }
+
+            EnsureDocumented();
         });
     }
 
@@ -106,17 +128,38 @@ internal static class PreviewConfig
 
         return File.ReadLines(ConfigPath, Encoding.UTF8)
             .Select(line => line.Trim())
-            .Where(line => line.Length > 0)
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
             .ToHashSet(PathComparer);
     }
 
     private static void WritePaths(IEnumerable<string> paths)
     {
+        var lines = ConfigHeader
+            .Concat(paths.OrderBy(path => path, PathComparer));
+        WriteConfigContents(string.Join(Environment.NewLine, lines) + Environment.NewLine);
+    }
+
+    private static void EnsureDocumented()
+    {
+        var contents = File.ReadAllText(ConfigPath, Encoding.UTF8).TrimStart('\uFEFF');
+        if (contents.Contains(ConfigTitle, StringComparison.Ordinal))
+            return;
+
+        var header = string.Join(Environment.NewLine, ConfigHeader);
+        var separator = contents.Length == 0 ? string.Empty : Environment.NewLine + Environment.NewLine;
+        WriteConfigContents(header + Environment.NewLine + separator + contents);
+    }
+
+    private static void WriteConfigContents(string contents)
+    {
         EnsureDirectory();
         var temporaryPath = ConfigPath + "." + Environment.ProcessId + ".tmp";
         try
         {
-            File.WriteAllLines(temporaryPath, paths, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.WriteAllText(
+                temporaryPath,
+                contents,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             File.Move(temporaryPath, ConfigPath, overwrite: true);
         }
         finally

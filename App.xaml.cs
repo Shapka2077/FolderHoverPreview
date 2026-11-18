@@ -9,6 +9,8 @@ public partial class App : Application
 {
     private const string InstanceMutexName = @"Local\ShapkaFolderHoverPreviewCSharp";
     private const string ContextMenuRegistryPath = @"Software\Classes\Directory\shell\FolderHoverPreview";
+    private const string SettingsRegistryPath = @"Software\Shapka\FolderHoverPreview";
+    private const string ContextMenuEnabledValueName = "ContextMenuEnabled";
     private Mutex? _instanceMutex;
     private bool _ownsInstanceMutex;
     private PreviewController? _controller;
@@ -49,7 +51,11 @@ public partial class App : Application
         try
         {
             PreviewConfig.EnsureCreated();
-            InstallContextMenu();
+            if (IsContextMenuEnabled)
+                InstallContextMenu();
+            else
+                RemoveContextMenu();
+
             _controller = new PreviewController(PreviewConfig.LoadEnabledDesktopFolders());
             _controller.Start();
         }
@@ -100,6 +106,47 @@ public partial class App : Application
     {
         Registry.CurrentUser.DeleteSubKeyTree(ContextMenuRegistryPath, throwOnMissingSubKey: false);
         NativeMethods.SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    internal static bool IsContextMenuEnabled
+    {
+        get
+        {
+            using var settings = Registry.CurrentUser.OpenSubKey(SettingsRegistryPath, writable: false);
+            return settings?.GetValue(ContextMenuEnabledValueName) is not int value || value != 0;
+        }
+    }
+
+    internal static void SetContextMenuEnabled(bool enabled)
+    {
+        var wasEnabled = IsContextMenuEnabled;
+        try
+        {
+            if (enabled)
+                InstallContextMenu();
+            else
+                RemoveContextMenu();
+
+            using var settings = Registry.CurrentUser.CreateSubKey(SettingsRegistryPath)
+                ?? throw new InvalidOperationException("Не удалось сохранить настройку пункта меню папок.");
+            settings.SetValue(
+                ContextMenuEnabledValueName,
+                enabled ? 1 : 0,
+                RegistryValueKind.DWord);
+        }
+        catch
+        {
+            try
+            {
+                if (wasEnabled)
+                    InstallContextMenu();
+                else
+                    RemoveContextMenu();
+            }
+            catch { }
+
+            throw;
+        }
     }
 
     internal static string GetLaunchCommand()

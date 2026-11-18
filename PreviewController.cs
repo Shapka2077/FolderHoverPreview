@@ -103,6 +103,8 @@ internal sealed class PreviewController : IDisposable
         formatsMenu.DropDownItems.Add(_configureCustomFormatsItem);
         UpdateFormatMenuChecks();
         menu.Items.Add(formatsMenu);
+        KeepCheckedItemsOpen(menu);
+        KeepCheckedItemsOpen(formatsMenu.DropDown);
 
         var startupItem = new Forms.ToolStripMenuItem("Автозагрузка")
         {
@@ -126,30 +128,36 @@ internal sealed class PreviewController : IDisposable
             }
         };
         menu.Items.Add(startupItem);
-        var removeContextMenuItem = new Forms.ToolStripMenuItem(
-            "Удалить пункт «Превью при наведении» из меню папок");
-        removeContextMenuItem.Click += (_, _) =>
+        var contextMenuItem = new Forms.ToolStripMenuItem(
+            "Показывать пункт «Превью при наведении» в меню папок")
+        {
+            CheckOnClick = true,
+            Checked = App.IsContextMenuEnabled
+        };
+        contextMenuItem.Click += (_, _) =>
         {
             try
             {
-                App.RemoveContextMenu();
+                App.SetContextMenuEnabled(contextMenuItem.Checked);
             }
             catch (Exception error)
             {
+                contextMenuItem.Checked = App.IsContextMenuEnabled;
                 Forms.MessageBox.Show(
-                    $"Не удалось удалить пункт меню:\n{error.Message}",
+                    $"Не удалось изменить пункт меню:\n{error.Message}",
                     "FolderHoverPreview",
                     Forms.MessageBoxButtons.OK,
                     Forms.MessageBoxIcon.Error);
             }
         };
-        menu.Items.Add(removeContextMenuItem);
+        menu.Items.Add(contextMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => System.Windows.Application.Current.Shutdown());
         menu.Opening += (_, _) =>
         {
             RefreshPreferences(force: true);
             startupItem.Checked = StartupRegistration.IsEnabled;
+            contextMenuItem.Checked = App.IsContextMenuEnabled;
             UpdateFormatMenuChecks();
         };
         _trayMenu = menu;
@@ -359,6 +367,28 @@ internal sealed class PreviewController : IDisposable
             CustomExtensions = _formatPreferences.CustomExtensions,
             UseCustomExtensions = _formatPreferences.UseCustomExtensions
         });
+    }
+
+    private static void KeepCheckedItemsOpen(Forms.ToolStripDropDown menu)
+    {
+        // ItemClicked is raised before the item's Click handler and before
+        // WinForms attempts to close the dropdown.
+        var cancelNextItemClose = false;
+        menu.ItemClicked += (_, e) =>
+        {
+            cancelNextItemClose = e.ClickedItem is Forms.ToolStripMenuItem
+            {
+                CheckOnClick: true
+            };
+        };
+        menu.Closing += (_, e) =>
+        {
+            if (e.CloseReason == Forms.ToolStripDropDownCloseReason.ItemClicked)
+            {
+                e.Cancel = cancelNextItemClose;
+            }
+            cancelNextItemClose = false;
+        };
     }
 
     private void ToggleCustomFormats()
