@@ -295,11 +295,13 @@ internal sealed class PreviewController : IDisposable
             {
                 try
                 {
+                    var enabledFolderBounds = _desktop.EnabledFolderBounds(_folders, _desktopLayoutRevision);
                     _preview.ShowFolder(
                         found,
                         _folders[found],
                         point,
                         folderHit,
+                        enabledFolderBounds,
                         _formatPreferences.GetEnabledExtensionSet());
                     _currentFolder = found;
                 }

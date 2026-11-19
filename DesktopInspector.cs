@@ -31,12 +31,17 @@ internal sealed class DesktopInspector
     public string? ItemNameAt(NativeMethods.Point point, int layoutRevision) =>
         ItemAt(point, layoutRevision)?.Name;
 
+    public IReadOnlyList<DesktopHit> EnabledFolderBounds(
+        IReadOnlyDictionary<string, string> folders,
+        int layoutRevision)
+    {
+        EnsureItemsCurrent(layoutRevision);
+        return _items.Where(item => folders.ContainsKey(item.Name)).ToArray();
+    }
+
     private DesktopHit? ItemAt(NativeMethods.Point point, int layoutRevision)
     {
-        var listView = DesktopListViewHandle();
-        var now = Environment.TickCount64;
-        if (now - _refreshedAt > 2000 || listView != _cachedListView || layoutRevision != _cachedRevision)
-            RefreshItems(listView, layoutRevision, now);
+        EnsureItemsCurrent(layoutRevision);
 
         foreach (var item in _items)
         {
@@ -48,6 +53,14 @@ internal sealed class DesktopInspector
         }
 
         return null;
+    }
+
+    private void EnsureItemsCurrent(int layoutRevision)
+    {
+        var listView = DesktopListViewHandle();
+        var now = Environment.TickCount64;
+        if (now - _refreshedAt > 2000 || listView != _cachedListView || layoutRevision != _cachedRevision)
+            RefreshItems(listView, layoutRevision, now);
     }
 
     public bool IsObscured(NativeMethods.Point point, IntPtr ignoredWindow)

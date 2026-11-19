@@ -121,6 +121,7 @@ internal sealed class PreviewWindow : Window
         string folderPath,
         NativeMethods.Point cursor,
         DesktopHit folderBounds,
+        IReadOnlyList<DesktopHit> enabledFolderBounds,
         IReadOnlySet<string> enabledExtensions)
     {
         _heading.Text = folderName;
@@ -148,7 +149,7 @@ internal sealed class PreviewWindow : Window
         if (!IsVisible)
             Show();
         UpdateLayout();
-        PositionNearFolder(cursor, folderBounds);
+        PositionNearFolder(cursor, folderBounds, enabledFolderBounds);
         Opacity = _theme.WindowOpacity;
     }
 
@@ -226,6 +227,7 @@ internal sealed class PreviewWindow : Window
     private void PositionNearFolder(
         NativeMethods.Point cursor,
         DesktopHit folderBounds,
+        IReadOnlyList<DesktopHit>? foldersToAvoid = null,
         bool prepareMonitorDpi = true)
     {
         var handle = new WindowInteropHelper(this).Handle;
@@ -268,7 +270,6 @@ internal sealed class PreviewWindow : Window
         var scale = dpi > 0 ? dpi / 96.0 : 1.0;
         var width = (int)Math.Ceiling(ActualWidth * scale);
         var height = (int)Math.Ceiling(ActualHeight * scale);
-        var work = monitorInfo.Work;
         var folderLeft = (int)Math.Floor(folderBounds.Left);
         var folderTop = (int)Math.Floor(folderBounds.Top);
         var folderRight = (int)Math.Ceiling(folderBounds.Right);
@@ -276,13 +277,104 @@ internal sealed class PreviewWindow : Window
         const int margin = 8;
         const int gap = 12;
 
-        var candidates = new[]
+        var work = monitorInfo.Work;
+        var obstacles = (foldersToAvoid ?? Array.Empty<DesktopHit>())
+            .Where(folder => folder.Right > work.Left && folder.Left < work.Right
+                && folder.Bottom > work.Top && folder.Top < work.Bottom)
+            .ToList();
+        if (!obstacles.Contains(folderBounds))
+            obstacles.Add(folderBounds);
+
+        var candidates = new List<(int X, int Y)>();
+        var rightX = folderRight + gap;
+        if (FitsWorkArea(rightX, work.Left, work.Right, width, margin)
+            && TryClampAlongFolder(
+                folderTop,
+                work.Top,
+                work.Bottom,
+                folderTop,
+                folderBottom,
+                height,
+                margin,
+                out var rightY))
         {
-            (X: folderRight + gap, Y: folderTop),
-            (X: folderLeft - width - gap, Y: folderTop),
-            (X: folderLeft, Y: folderBottom + gap),
-            (X: folderLeft, Y: folderTop - height - gap)
-        };
+            candidates.Add((rightX, rightY));
+        }
+
+        var leftX = folderLeft - width - gap;
+        if (FitsWorkArea(leftX, work.Left, work.Right, width, margin)
+            && TryClampAlongFolder(
+                folderTop,
+                work.Top,
+                work.Bottom,
+                folderTop,
+                folderBottom,
+                height,
+                margin,
+                out var leftY))
+        {
+            candidates.Add((leftX, leftY));
+        }
+
+        var bottomY = folderBottom + gap;
+        if (FitsWorkArea(bottomY, work.Top, work.Bottom, height, margin)
+            && TryClampAlongFolder(
+                folderLeft,
+                work.Left,
+                work.Right,
+                folderLeft,
+                folderRight,
+                width,
+                margin,
+                out var bottomX))
+        {
+            candidates.Add((bottomX, bottomY));
+        }
+
+        var topY = folderTop - height - gap;
+        if (FitsWorkArea(topY, work.Top, work.Bottom, height, margin)
+            && TryClampAlongFolder(
+                folderLeft,
+                work.Left,
+                work.Right,
+                folderLeft,
+                folderRight,
+                width,
+                margin,
+                out var topX))
+        {
+            candidates.Add((topX, topY));
+        }
+
+        if (candidates.Count == 0)
+        {
+            // Keep the popup attached even when its full bounds cannot fit on screen.
+            if (TryClampAlongFolder(
+                folderTop, work.Top, work.Bottom, folderTop, folderBottom, height, margin, out var rightFallbackY))
+            {
+                candidates.Add((rightX, rightFallbackY));
+            }
+            if (TryClampAlongFolder(
+                folderTop, work.Top, work.Bottom, folderTop, folderBottom, height, margin, out var leftFallbackY))
+            {
+                candidates.Add((leftX, leftFallbackY));
+            }
+            if (TryClampAlongFolder(
+                folderLeft, work.Left, work.Right, folderLeft, folderRight, width, margin, out var bottomFallbackX))
+            {
+                candidates.Add((bottomFallbackX, bottomY));
+            }
+            if (TryClampAlongFolder(
+                folderLeft, work.Left, work.Right, folderLeft, folderRight, width, margin, out var topFallbackX))
+            {
+                candidates.Add((topFallbackX, topY));
+            }
+
+            if (candidates.Count == 0)
+            {
+                candidates.Add((rightX, folderTop));
+            }
+        }
 
         var x = 0;
         var y = 0;
@@ -290,23 +382,16 @@ internal sealed class PreviewWindow : Window
         var bestCursorDistance = long.MaxValue;
         foreach (var candidate in candidates)
         {
-            var candidateX = ClampToWorkArea(candidate.X, work.Left, work.Right, width, margin);
-            var candidateY = ClampToWorkArea(candidate.Y, work.Top, work.Bottom, height, margin);
-            var overlapWidth = Math.Max(
-                0,
-                Math.Min(candidateX + width, folderRight) - Math.Max(candidateX, folderLeft));
-            var overlapHeight = Math.Max(
-                0,
-                Math.Min(candidateY + height, folderBottom) - Math.Max(candidateY, folderTop));
-            var overlap = (long)overlapWidth * overlapHeight;
-            var dx = (long)candidateX - cursor.X;
-            var dy = (long)candidateY - cursor.Y;
-            var cursorDistance = dx * dx + dy * dy;
+            var overlap = CalculateFolderOverlap(candidate.X, candidate.Y, width, height, obstacles);
+            var cursorDx = (long)candidate.X - cursor.X;
+            var cursorDy = (long)candidate.Y - cursor.Y;
+            var cursorDistance = cursorDx * cursorDx + cursorDy * cursorDy;
 
-            if (overlap < bestOverlap || (overlap == bestOverlap && cursorDistance < bestCursorDistance))
+            if (overlap < bestOverlap
+                || (overlap == bestOverlap && cursorDistance < bestCursorDistance))
             {
-                x = candidateX;
-                y = candidateY;
+                x = candidate.X;
+                y = candidate.Y;
                 bestOverlap = overlap;
                 bestCursorDistance = cursorDistance;
             }
@@ -322,11 +407,51 @@ internal sealed class PreviewWindow : Window
             NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
     }
 
-    private static int ClampToWorkArea(int coordinate, int start, int end, int size, int margin)
+    private static bool FitsWorkArea(int coordinate, int start, int end, int size, int margin) =>
+        coordinate >= start + margin && coordinate <= end - size - margin;
+
+    private static bool TryClampAlongFolder(
+        int preferred,
+        int workStart,
+        int workEnd,
+        int folderStart,
+        int folderEnd,
+        int windowSize,
+        int margin,
+        out int coordinate)
     {
-        var minimum = start + margin;
-        var maximum = end - size - margin;
-        return maximum < minimum ? minimum : Math.Clamp(coordinate, minimum, maximum);
+        var minimum = Math.Max(workStart + margin, folderStart - windowSize + 1);
+        var maximum = Math.Min(workEnd - windowSize - margin, folderEnd - 1);
+        if (maximum < minimum)
+        {
+            coordinate = 0;
+            return false;
+        }
+
+        coordinate = Math.Clamp(preferred, minimum, maximum);
+        return true;
+    }
+
+    private static long CalculateFolderOverlap(
+        int x,
+        int y,
+        int width,
+        int height,
+        IReadOnlyList<DesktopHit> folders)
+    {
+        long overlap = 0;
+        foreach (var folder in folders)
+        {
+            var left = (int)Math.Floor(folder.Left);
+            var top = (int)Math.Floor(folder.Top);
+            var right = (int)Math.Ceiling(folder.Right);
+            var bottom = (int)Math.Ceiling(folder.Bottom);
+            var overlapWidth = Math.Max(0, Math.Min(x + width, right) - Math.Max(x, left));
+            var overlapHeight = Math.Max(0, Math.Min(y + height, bottom) - Math.Max(y, top));
+            overlap += (long)overlapWidth * overlapHeight;
+        }
+
+        return overlap;
     }
 
     private static List<string> GetPreviewFiles(string folderPath, IReadOnlySet<string> enabledExtensions)
